@@ -62,7 +62,7 @@ func NewSDM(bitSize int, numHardLocations int) (*SDM, error) {
 
 	return &SDM{
 		BitSize:        bitSize,
-		ActivationDist: bitSize / 3, //CalculateOptimalRadius(bitSize),
+		ActivationDist: CalculateOptimalRadius(bitSize),
 		HardLocations:  hl,
 	}, nil
 }
@@ -177,25 +177,26 @@ func (s *SDM) ReadData(address Vector) Vector {
 }
 
 // ReadConverge drives loop stabilization across the address track, then reads out the data payload.
-func (s *SDM) Read(initialNoisyAddress Vector) Vector {
-	x0 := make(Vector, len(initialNoisyAddress)) // Address state 2 cycles ago
-	x1 := make(Vector, len(initialNoisyAddress)) // Address state 1 cycle ago
-	x2 := make(Vector, len(initialNoisyAddress)) // Current address state
+// func (s *SDM) Read(address Vector) Vector {
+// 	x0 := make(Vector, len(address)) // Address state 2 cycles ago
+// 	x1 := make(Vector, len(address)) // Address state 1 cycle ago
+// 	x2 := make(Vector, len(address)) // Current address state
 
-	copy(x1, initialNoisyAddress)
-	maxSteps := 20
+// 	copy(x1, address)
+// 	maxSteps := 20
 
-	for steps := 0; steps < maxSteps; steps++ {
-		// Evaluate the address track to extract a cleaner address vector
-		x2 = s.ReadAddress(x1)
+// 	for steps := 0; steps < maxSteps; steps++ {
+// 		// Evaluate the address track to extract a cleaner address vector
+// 		x2 = s.ReadAddress(x1)
 
-		// Loop detection: Stop when the address tracks match a fixed point or period-2 oscillation
-		if x1.HammingDistance(x2) == 0 || (steps > 0 && x0.HammingDistance(x2) == 0) {
-			return s.ReadData(x2)
-		}
+// 		// Loop detection: Stop when the address tracks match a fixed point or period-2 oscillation
+// 		if x1.HammingDistance(x2) == 0 || (steps > 0 && x0.HammingDistance(x2) == 0) {
+// 			return s.ReadData(x2)
+// 		}
 
-		copy(x0, x1)
-		copy(x1, x2)
-	}
-	return s.ReadData(x2)
-}
+// 		copy(x0, x1)
+// 		copy(x1, x2)
+// 	}
+
+// 	return s.ReadData(x2)
+// }
