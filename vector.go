@@ -58,6 +58,18 @@ func (v Vector) Equal(other Vector) bool {
 	return true
 }
 
+// Overlap calculates the number of bit positions where both vectors contain a 1.
+// This is equivalent to counting the active bits in the intersection (bitwise AND)
+// of the two vectors, which is a standard metric for sparse data comparison.
+func (v Vector) Overlap(other Vector) int {
+	overlap := 0
+	// Handle matching word limits across the slice layout
+	for i := range v {
+		overlap += bits.OnesCount64(v[i] & other[i])
+	}
+	return overlap
+}
+
 // NewRandomVector generates a binary Vector where each 64-bit word contains
 // a specific percentage of bits randomly set to 1.
 func NewRandomVector(bitSize int, percentage float64) (Vector, error) {

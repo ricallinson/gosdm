@@ -67,6 +67,27 @@ func TestNewRandomVector(t *testing.T) {
 	}
 }
 
+// TestVectorOverlap verifies that the overlap math perfectly counts the intersection
+// of active 1 bits between two structured vectors.
+func TestVectorOverlap(t *testing.T) {
+	// Vector 1 has bits set at indices 0, 1, 2, 3 (0xF) and 60, 61, 62, 63 (0xF0...)
+	v1 := Vector{uint64(0xF00000000000000F), uint64(0x0000000000000000)}
+
+	// Vector 2 has bits set at indices 0, 1 (0x3) and 62, 63 (0xC0...)
+	v2 := Vector{uint64(0xC000000000000003), uint64(0x0000000000000000)}
+
+	// Intersection targets:
+	// Indices 0 and 1 match (2 bits)
+	// Indices 62 and 63 match (2 bits)
+	// Total expected shared bits = 4
+	expectedOverlap := 4
+	actualOverlap := v1.Overlap(v2)
+
+	if actualOverlap != expectedOverlap {
+		t.Errorf("Expected bitwise Overlap of %d, but calculated %d", expectedOverlap, actualOverlap)
+	}
+}
+
 // TestNewRandomVectorError verifies that NewRandomVector correctly returns an error
 // when a bit size that is not a multiple of 64 is requested.
 func TestNewRandomVectorError(t *testing.T) {
