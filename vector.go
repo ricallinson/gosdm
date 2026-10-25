@@ -46,12 +46,10 @@ func (v Vector) Norm() int {
 // Returns 'true' if the given Vector is a bit match.
 func (v Vector) Equal(other Vector) bool {
 	if len(v) != len(other) {
-		fmt.Println(len(v), len(other))
 		return false
 	}
 	for i := range v {
 		if v[i] != other[i] {
-			fmt.Println(v[i], other[i])
 			return false
 		}
 	}

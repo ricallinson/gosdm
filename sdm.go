@@ -22,22 +22,48 @@ type SDM struct {
 	HardLocations  []HardLocation
 }
 
-// CalculateOptimalRadius calculates the max acceptable Hamming distance
-// for an optimal target selection density of ~1.5% using the Z-score equation.
+// InverseErf computes the inverse error function using Winitzki's highly accurate approximation.
+func InverseErf(x float64) float64 {
+	const a = 0.147
+	if x == 0 {
+		return 0
+	}
+
+	logTerm := math.Log(1.0 - x*x)
+	term1 := 2.0/(math.Pi*a) + logTerm/2.0
+	term2 := logTerm / a
+
+	innerSqrt := math.Sqrt(term1*term1 - term2)
+	val := math.Sqrt(innerSqrt - term1)
+
+	if x < 0 {
+		return -val
+	}
+	return val
+}
+
+// InverseNormalCDF (Probit function) converts a probability p into its corresponding Z-score.
+func InverseNormalCDF(p float64) float64 {
+	// Standard normal distribution translation to inverse error function
+	return math.Sqrt(2.0) * InverseErf(2.0*p-1.0)
+}
+
+// CalculateRadiusDynamic scales the Z-score and radius automatically based on the bit size (n).
+// It sets the target activation probability to p = 1 / n.
 func CalculateOptimalRadius(bitSize int) int {
-	n := float64(bitSize)
+	// 1. Calculate target probability dynamically based on bit size
+	targetP := 0.8 / float64(bitSize)
 
-	// Mean (μ) and Standard Deviation (σ) of a random high-dimensional binary space
-	mean := n / 2.0
-	stdDev := math.Sqrt(n) / 2.0
+	// 2. Derive the exact Z-score for this probability (one-tailed)
+	// We pass targetP to find the Z-score mapping the lower tail boundary
+	z := -InverseNormalCDF(targetP)
 
-	// A Z-score of -2.12 targets the optimal ~1.67% lower-tail firing probability
-	zScore := 2.12
+	// 3. Apply the Gaussian approximation formula for the radius
+	mean := float64(bitSize) / 2.0
+	stdDev := math.Sqrt(float64(bitSize)) / 2.0
 
-	radius := mean - (zScore * stdDev)
-
-	// Round to the nearest whole integer bit coordinate
-	return int(math.Round(radius))
+	radius := mean - (z * stdDev)
+	return int(math.Floor(radius))
 }
 
 // NewSDM initializes a new Sparse Distributed Memory instance with split counter allocations.
@@ -60,9 +86,12 @@ func NewSDM(bitSize int, numHardLocations int) (*SDM, error) {
 		}
 	}
 
+	radius := CalculateOptimalRadius(bitSize)
+	fmt.Printf("NewSDM(BitSize: %d, Radius: %d, HardLocations: %d)\n", bitSize, radius, numHardLocations)
+
 	return &SDM{
 		BitSize:        bitSize,
-		ActivationDist: CalculateOptimalRadius(bitSize),
+		ActivationDist: radius,
 		HardLocations:  hl,
 	}, nil
 }
@@ -105,98 +134,53 @@ func (s *SDM) Write(address, data Vector) {
 		}
 	}
 
-	fmt.Printf("Write() to %d\n", counter)
+	// fmt.Printf("Write() to %d HardLocations\n", counter)
+}
+
+func (s *SDM) sumCounters(counters []int) Vector {
+	result := make(Vector, s.BitSize/64)
+
+	for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
+		wordIdx := bitIdx / 64
+		bitOffset := bitIdx % 64
+		if counters[bitIdx] > 0 {
+			result[wordIdx] |= (1 << bitOffset)
+		}
+	}
+
+	return result
+}
+
+func (s *SDM) read(address Vector, readData bool) Vector {
+	sumCounters := make([]int, s.BitSize)
+	activatedCount := 0
+
+	for i := range s.HardLocations {
+		if s.HardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
+			activatedCount++
+			for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
+				if readData {
+					sumCounters[bitIdx] += int(s.HardLocations[i].DataCounters[bitIdx])
+				} else {
+					sumCounters[bitIdx] += int(s.HardLocations[i].AddressCounters[bitIdx])
+				}
+			}
+		}
+	}
+
+	if activatedCount == 0 {
+		return make(Vector, s.BitSize/64)
+	}
+
+	return s.sumCounters(sumCounters)
 }
 
 // ReadAddress retrieves the next convergence address coordinate from the Address track.
 func (s *SDM) ReadAddress(address Vector) Vector {
-	counter := 0
-	sumCounters := make([]int, s.BitSize)
-	activatedCount := 0
-
-	for i := range s.HardLocations {
-		if s.HardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
-			activatedCount++
-			for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
-				sumCounters[bitIdx] += int(s.HardLocations[i].AddressCounters[bitIdx])
-			}
-			counter++
-		}
-	}
-
-	result := make(Vector, s.BitSize/64)
-	if activatedCount == 0 {
-		return result
-	}
-
-	for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
-		wordIdx := bitIdx / 64
-		bitOffset := bitIdx % 64
-		if sumCounters[bitIdx] > 0 {
-			result[wordIdx] |= (1 << bitOffset)
-		}
-	}
-
-	fmt.Printf("ReadAddress() from %d\n", counter)
-
-	return result
+	return s.read(address, false)
 }
 
 // ReadData retrieves the structural payload token from the independent Data track.
 func (s *SDM) ReadData(address Vector) Vector {
-	counter := 0
-	sumCounters := make([]int, s.BitSize)
-	activatedCount := 0
-
-	for i := range s.HardLocations {
-		if s.HardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
-			activatedCount++
-			for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
-				sumCounters[bitIdx] += int(s.HardLocations[i].DataCounters[bitIdx])
-			}
-			counter++
-		}
-	}
-
-	result := make(Vector, s.BitSize/64)
-	if activatedCount == 0 {
-		return result
-	}
-
-	for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
-		wordIdx := bitIdx / 64
-		bitOffset := bitIdx % 64
-		if sumCounters[bitIdx] > 0 {
-			result[wordIdx] |= (1 << bitOffset)
-		}
-	}
-
-	fmt.Printf("ReadData() from %d\n", counter)
-
-	return result
+	return s.read(address, true)
 }
-
-// ReadConverge drives loop stabilization across the address track, then reads out the data payload.
-// func (s *SDM) Read(address Vector) Vector {
-// 	x0 := make(Vector, len(address)) // Address state 2 cycles ago
-// 	x1 := make(Vector, len(address)) // Address state 1 cycle ago
-// 	x2 := make(Vector, len(address)) // Current address state
-
-// 	copy(x1, address)
-// 	maxSteps := 20
-
-// 	for steps := 0; steps < maxSteps; steps++ {
-// 		// Evaluate the address track to extract a cleaner address vector
-// 		x2 = s.ReadAddress(x1)
-
-// 		// Loop detection: Stop when the address tracks match a fixed point or period-2 oscillation
-// 		if x1.HammingDistance(x2) == 0 || (steps > 0 && x0.HammingDistance(x2) == 0) {
-// 			return s.ReadData(x2)
-// 		}
-
-// 		copy(x0, x1)
-// 		copy(x1, x2)
-// 	}
-
-// 	return s.ReadData(x2)
-// }
