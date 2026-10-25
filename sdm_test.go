@@ -259,14 +259,14 @@ var numTests = 1000 / 3      // Reduce to make sure the tests always pass
 
 func Test_Write_Multi_Addresses(t *testing.T) {
 	for _, v := range []int{1, 2, 8} {
-		t.Logf("Testing Addresses with a %d bit size...", bitSize*v)
+		t.Logf("Testing %d Write/ReadAddress with a %d bit size...", numTests*v, bitSize*v)
 		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, false)
 	}
 }
 
 func Test_Write_Multi_Data(t *testing.T) {
 	for _, v := range []int{1, 2, 8} {
-		t.Logf("Testing Data with a %d bit size...", bitSize*v)
+		t.Logf("Testing %d Write/ReadData with a %d bit size...", numTests*v, bitSize*v)
 		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, true)
 	}
 }
