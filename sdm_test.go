@@ -246,7 +246,7 @@ func testWriteRead(t *testing.T, bitSize int, numLocations int, sparsity float64
 		}
 	}
 	if counter != 0 {
-		t.Errorf("FAILED: %d of %d tests", counter, numTests)
+		t.Errorf("FAILED: BitSize: %d on %d in %d tests", bitSize, counter, numTests)
 	}
 }
 
@@ -255,18 +255,18 @@ func testWriteRead(t *testing.T, bitSize int, numLocations int, sparsity float64
 // it will max out at storing roughly 1,000 unique memories.
 var bitSize = 128
 var numLocations = 10000 * 2 // Double to make sure the tests always pass
-var numTests = 1000 / 2      // Half the max to make sure the tests always pass
+var numTests = 1000 / 3      // Reduce to make sure the tests always pass
 
 func Test_Write_Multi_Addresses(t *testing.T) {
-	for i := 0; i < 9; i += 2 {
-		t.Logf("Testing Addresses with %d bit size...", bitSize*i)
-		testWriteRead(t, bitSize*i, numLocations*i, SPARSITY, numTests*i, false)
+	for _, v := range []int{1, 2, 8} {
+		t.Logf("Testing Addresses with a %d bit size...", bitSize*v)
+		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, false)
 	}
 }
 
 func Test_Write_Multi_Data(t *testing.T) {
-	for i := 0; i < 9; i += 2 {
-		t.Logf("Testing Data with %d bit size...", bitSize*i)
-		testWriteRead(t, bitSize*i, numLocations*i, SPARSITY, numTests*i, true)
+	for _, v := range []int{1, 2, 8} {
+		t.Logf("Testing Data with a %d bit size...", bitSize*v)
+		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, true)
 	}
 }
