@@ -6,20 +6,20 @@ import (
 	"math"
 )
 
-var SPARSITY = 50.0
+var HAMMING_DISTANCE_SPARSITY = 50.0
 
-// HardLocation coordinates separate counter registers to protect data signals from cross-talk.
-type HardLocation struct {
+// HammingDistanceHardLocation coordinates separate counter registers to protect data signals from cross-talk.
+type HammingDistanceHardLocation struct {
 	Address         Vector
 	AddressCounters []int16 // Dedicated entirely to address self-convergence (auto-association)
 	DataCounters    []int16 // Dedicated entirely to storing arbitrary payloads (hetero-association)
 }
 
-// SDM implements the Sparse Distributed Memory system.
-type SDM struct {
-	BitSize        int
-	ActivationDist int
-	HardLocations  []HardLocation
+// HammingDistanceSDM implements the Sparse Distributed Memory system.
+type HammingDistanceSDM struct {
+	BitSize                      int
+	ActivationDist               int
+	HammingDistanceHardLocations []HammingDistanceHardLocation
 }
 
 // InverseErf computes the inverse error function using Winitzki's highly accurate approximation.
@@ -66,20 +66,20 @@ func CalculateOptimalRadius(bitSize int) int {
 	return int(math.Floor(radius))
 }
 
-// NewSDM initializes a new Sparse Distributed Memory instance with split counter allocations.
-func NewSDM(bitSize int, numHardLocations int) (*SDM, error) {
+// NewHammingDistanceSDM initializes a new Sparse Distributed Memory instance with split counter allocations.
+func NewHammingDistanceSDM(bitSize int, numHardLocations int) (*HammingDistanceSDM, error) {
 
 	if bitSize%64 != 0 {
 		return nil, errors.New("bit size must be a multiple of 64")
 	}
 
-	hl := make([]HardLocation, numHardLocations)
+	hl := make([]HammingDistanceHardLocation, numHardLocations)
 	for i := 0; i < numHardLocations; i++ {
-		addr, err := NewRandomVector(bitSize, SPARSITY)
+		addr, err := NewRandomVector(bitSize, HAMMING_DISTANCE_SPARSITY)
 		if err != nil {
 			return nil, err
 		}
-		hl[i] = HardLocation{
+		hl[i] = HammingDistanceHardLocation{
 			Address:         addr,
 			AddressCounters: make([]int16, bitSize),
 			DataCounters:    make([]int16, bitSize),
@@ -87,21 +87,21 @@ func NewSDM(bitSize int, numHardLocations int) (*SDM, error) {
 	}
 
 	radius := CalculateOptimalRadius(bitSize)
-	fmt.Printf("NewSDM(BitSize: %d, Radius: %d, HardLocations: %d)\n", bitSize, radius, numHardLocations)
+	fmt.Printf("NewHammingDistanceSDM(BitSize: %d, HardLocations: %d, Radius: %d)\n", bitSize, numHardLocations, radius)
 
-	return &SDM{
-		BitSize:        bitSize,
-		ActivationDist: radius,
-		HardLocations:  hl,
+	return &HammingDistanceSDM{
+		BitSize:                      bitSize,
+		ActivationDist:               radius,
+		HammingDistanceHardLocations: hl,
 	}, nil
 }
 
 // Write trains both topologies simultaneously inside their respective channels without bleeding.
-func (s *SDM) Write(address, data Vector) {
+func (s *HammingDistanceSDM) Write(address, data Vector) {
 	counter := 0
 
-	for i := range s.HardLocations {
-		if s.HardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
+	for i := range s.HammingDistanceHardLocations {
+		if s.HammingDistanceHardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
 			for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
 				wordIdx := bitIdx / 64
 				bitOffset := bitIdx % 64
@@ -109,24 +109,24 @@ func (s *SDM) Write(address, data Vector) {
 				// 1. Train the Address Track auto-associatively (storing address at address)
 				addrBit := (address[wordIdx] >> bitOffset) & 1
 				if addrBit == 1 {
-					if s.HardLocations[i].AddressCounters[bitIdx] < 32767 {
-						s.HardLocations[i].AddressCounters[bitIdx]++
+					if s.HammingDistanceHardLocations[i].AddressCounters[bitIdx] < 32767 {
+						s.HammingDistanceHardLocations[i].AddressCounters[bitIdx]++
 					}
 				} else {
-					if s.HardLocations[i].AddressCounters[bitIdx] > -32768 {
-						s.HardLocations[i].AddressCounters[bitIdx]--
+					if s.HammingDistanceHardLocations[i].AddressCounters[bitIdx] > -32768 {
+						s.HammingDistanceHardLocations[i].AddressCounters[bitIdx]--
 					}
 				}
 
 				// 2. Train the Data Track hetero-associatively (storing data payload at address)
 				dataBit := (data[wordIdx] >> bitOffset) & 1
 				if dataBit == 1 {
-					if s.HardLocations[i].DataCounters[bitIdx] < 32767 {
-						s.HardLocations[i].DataCounters[bitIdx]++
+					if s.HammingDistanceHardLocations[i].DataCounters[bitIdx] < 32767 {
+						s.HammingDistanceHardLocations[i].DataCounters[bitIdx]++
 					}
 				} else {
-					if s.HardLocations[i].DataCounters[bitIdx] > -32768 {
-						s.HardLocations[i].DataCounters[bitIdx]--
+					if s.HammingDistanceHardLocations[i].DataCounters[bitIdx] > -32768 {
+						s.HammingDistanceHardLocations[i].DataCounters[bitIdx]--
 					}
 				}
 			}
@@ -134,10 +134,10 @@ func (s *SDM) Write(address, data Vector) {
 		}
 	}
 
-	// fmt.Printf("Write() to %d HardLocations\n", counter)
+	// fmt.Printf("Write() to %d HammingDistanceHardLocations\n", counter)
 }
 
-func (s *SDM) sumCounters(counters []int) Vector {
+func (s *HammingDistanceSDM) sumCounters(counters []int) Vector {
 	result := make(Vector, s.BitSize/64)
 
 	for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
@@ -151,18 +151,18 @@ func (s *SDM) sumCounters(counters []int) Vector {
 	return result
 }
 
-func (s *SDM) read(address Vector, readData bool) Vector {
+func (s *HammingDistanceSDM) read(address Vector, readData bool) Vector {
 	sumCounters := make([]int, s.BitSize)
 	activatedCount := 0
 
-	for i := range s.HardLocations {
-		if s.HardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
+	for i := range s.HammingDistanceHardLocations {
+		if s.HammingDistanceHardLocations[i].Address.HammingDistance(address) <= s.ActivationDist {
 			activatedCount++
 			for bitIdx := 0; bitIdx < s.BitSize; bitIdx++ {
 				if readData {
-					sumCounters[bitIdx] += int(s.HardLocations[i].DataCounters[bitIdx])
+					sumCounters[bitIdx] += int(s.HammingDistanceHardLocations[i].DataCounters[bitIdx])
 				} else {
-					sumCounters[bitIdx] += int(s.HardLocations[i].AddressCounters[bitIdx])
+					sumCounters[bitIdx] += int(s.HammingDistanceHardLocations[i].AddressCounters[bitIdx])
 				}
 			}
 		}
@@ -176,11 +176,11 @@ func (s *SDM) read(address Vector, readData bool) Vector {
 }
 
 // ReadAddress retrieves the next convergence address coordinate from the Address track.
-func (s *SDM) ReadAddress(address Vector) Vector {
+func (s *HammingDistanceSDM) ReadAddress(address Vector) Vector {
 	return s.read(address, false)
 }
 
 // ReadData retrieves the structural payload token from the independent Data track.
-func (s *SDM) ReadData(address Vector) Vector {
+func (s *HammingDistanceSDM) ReadData(address Vector) Vector {
 	return s.read(address, true)
 }

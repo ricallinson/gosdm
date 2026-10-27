@@ -32,27 +32,27 @@ func addNoiseBits(t *testing.T, address Vector, noiseBits int) Vector {
 	return noisyAddress
 }
 
-// TestNewSDMError verifies that NewSDM correctly returns an error
+// TestNewHammingDistanceSDMError verifies that NewHammingDistanceSDM correctly returns an error
 // when a bit size that is not a multiple of 64 is requested.
-func TestNewSDMError(t *testing.T) {
+func TestHammingDistance_NewHammingDistanceSDMError(t *testing.T) {
 	invalidBitSize := 200 // 200 is not divisible by 64
 	numLocations := 100
 
-	s, err := NewSDM(invalidBitSize, numLocations)
+	s, err := NewHammingDistanceSDM(invalidBitSize, numLocations)
 	if err == nil {
 		t.Errorf("Expected an error for bit size %d (not a multiple of 64), but got nil", invalidBitSize)
 	}
 
 	if s != nil {
-		t.Errorf("Expected returned SDM pointer to be nil on error, but got %v", s)
+		t.Errorf("Expected returned HammingDistanceSDM pointer to be nil on error, but got %v", s)
 	}
 }
 
 // TestNewRandomVector verifies that random vectors are generated correctly
 // and enforce bit sizes that are multiples of 64.
-func TestNewRandomVector(t *testing.T) {
+func TestHammingDistance_NewRandomVector(t *testing.T) {
 	// Test valid bit size
-	v, err := NewRandomVector(256, SPARSITY)
+	v, err := NewRandomVector(256, HAMMING_DISTANCE_SPARSITY)
 	if err != nil {
 		t.Fatalf("Unexpected error generating vector: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestNewRandomVector(t *testing.T) {
 	}
 
 	// Test invalid bit size
-	_, err = NewRandomVector(100, SPARSITY)
+	_, err = NewRandomVector(100, HAMMING_DISTANCE_SPARSITY)
 	if err == nil {
 		t.Error("Expected an error for bit size not divisible by 64, got nil")
 	}
@@ -69,7 +69,7 @@ func TestNewRandomVector(t *testing.T) {
 
 // TestVectorOverlap verifies that the overlap math perfectly counts the intersection
 // of active 1 bits between two structured vectors.
-func TestVectorOverlap(t *testing.T) {
+func TestHammingDistance_VectorOverlap(t *testing.T) {
 	// Vector 1 has bits set at indices 0, 1, 2, 3 (0xF) and 60, 61, 62, 63 (0xF0...)
 	v1 := Vector{uint64(0xF00000000000000F), uint64(0x0000000000000000)}
 
@@ -90,10 +90,10 @@ func TestVectorOverlap(t *testing.T) {
 
 // TestNewRandomVectorError verifies that NewRandomVector correctly returns an error
 // when a bit size that is not a multiple of 64 is requested.
-func TestNewRandomVectorError(t *testing.T) {
+func TestHammingDistance_NewRandomVectorError(t *testing.T) {
 	invalidBitSize := 100 // 100 is not divisible by 64
 
-	v, err := NewRandomVector(invalidBitSize, SPARSITY)
+	v, err := NewRandomVector(invalidBitSize, HAMMING_DISTANCE_SPARSITY)
 	if err == nil {
 		t.Errorf("Expected an error for bit size %d (not a multiple of 64), but got nil", invalidBitSize)
 	}
@@ -118,9 +118,9 @@ func TestHammingDistance(t *testing.T) {
 
 // TestCounterOverflow verifies that hard location counters clamp safely
 // instead of wrapping around into negative bounds.
-func TestCounterOverflow(t *testing.T) {
+func TestHammingDistance_CounterOverflow(t *testing.T) {
 	bitSize := 64
-	s, _ := NewSDM(bitSize, 10)
+	s, _ := NewHammingDistanceSDM(bitSize, 10)
 	s.ActivationDist = 64 // Radius 64 means all locations activate
 
 	// CRITICAL FIX: Make the training address an all-ones vector.
@@ -129,55 +129,55 @@ func TestCounterOverflow(t *testing.T) {
 	data := Vector{0xFFFFFFFFFFFFFFFF}
 
 	// Explicitly seed the hard location address to match perfectly
-	s.HardLocations[0].Address = address
+	s.HammingDistanceHardLocations[0].Address = address
 
 	// Artificially saturate an Address track register close to MaxInt16
-	s.HardLocations[0].AddressCounters[0] = 32766
+	s.HammingDistanceHardLocations[0].AddressCounters[0] = 32766
 
 	// Write twice
 	s.Write(address, data)
 	s.Write(address, data)
 
 	// The counter should cap cleanly at 32767 instead of rolling over to -32768
-	if s.HardLocations[0].AddressCounters[0] != 32767 {
-		t.Errorf("Expected address counter to overflow-clamp at 32767, got %d", s.HardLocations[0].AddressCounters[0])
+	if s.HammingDistanceHardLocations[0].AddressCounters[0] != 32767 {
+		t.Errorf("Expected address counter to overflow-clamp at 32767, got %d", s.HammingDistanceHardLocations[0].AddressCounters[0])
 	}
 }
 
-// TestNewSDM verifies structural initialization and configuration constraints.
-func TestNewSDM(t *testing.T) {
+// TestNewHammingDistanceSDM verifies structural initialization and configuration constraints.
+func TestHammingDistance_NewHammingDistanceSDM(t *testing.T) {
 	bitSize := 128
 	numHL := 50
 
-	s, err := NewSDM(bitSize, numHL)
+	s, err := NewHammingDistanceSDM(bitSize, numHL)
 	if err != nil {
-		t.Fatalf("Failed to initialize SDM: %v", err)
+		t.Fatalf("Failed to initialize HammingDistanceSDM: %v", err)
 	}
 
-	if len(s.HardLocations) != numHL {
-		t.Errorf("Expected %d hard locations, got %d", numHL, len(s.HardLocations))
+	if len(s.HammingDistanceHardLocations) != numHL {
+		t.Errorf("Expected %d hard locations, got %d", numHL, len(s.HammingDistanceHardLocations))
 	}
 
-	if len(s.HardLocations[0].AddressCounters) != bitSize {
-		t.Errorf("Expected address counter size %d, got %d", bitSize, len(s.HardLocations[0].AddressCounters))
+	if len(s.HammingDistanceHardLocations[0].AddressCounters) != bitSize {
+		t.Errorf("Expected address counter size %d, got %d", bitSize, len(s.HammingDistanceHardLocations[0].AddressCounters))
 	}
 
-	if len(s.HardLocations[0].DataCounters) != bitSize {
-		t.Errorf("Expected data counter size %d, got %d", bitSize, len(s.HardLocations[0].DataCounters))
+	if len(s.HammingDistanceHardLocations[0].DataCounters) != bitSize {
+		t.Errorf("Expected data counter size %d, got %d", bitSize, len(s.HammingDistanceHardLocations[0].DataCounters))
 	}
 }
 
 // TestWriteAndExactRead asserts that data can be perfectly written
 // and fetched back using the exact same address string.
-func TestWriteAndExactRead(t *testing.T) {
+func TestHammingDistance_WriteAndExactRead(t *testing.T) {
 	bitSize := 128
-	s, _ := NewSDM(bitSize, 100) // Use broad radius to ensure registration match
+	s, _ := NewHammingDistanceSDM(bitSize, 100) // Use broad radius to ensure registration match
 
-	address, _ := NewRandomVector(bitSize, SPARSITY)
-	data, _ := NewRandomVector(bitSize, SPARSITY)
+	address, _ := NewRandomVector(bitSize, HAMMING_DISTANCE_SPARSITY)
+	data, _ := NewRandomVector(bitSize, HAMMING_DISTANCE_SPARSITY)
 
 	// Explicitly seed a hard location to guarantee exact tracking availability
-	s.HardLocations[0].Address = address
+	s.HammingDistanceHardLocations[0].Address = address
 
 	s.Write(address, data)
 	retrieved := s.ReadData(address)
@@ -188,15 +188,15 @@ func TestWriteAndExactRead(t *testing.T) {
 	}
 }
 
-func TestWriteNoiseToleranceWithKnownAddress(t *testing.T) {
+func TestHammingDistance_WriteNoiseToleranceWithKnownAddress(t *testing.T) {
 	bitSize := 128
 	numLocations := 1000
 
-	s, _ := NewSDM(bitSize, numLocations)
+	s, _ := NewHammingDistanceSDM(bitSize, numLocations)
 
-	targetAddr, _ := NewRandomVector(bitSize, SPARSITY)
+	targetAddr, _ := NewRandomVector(bitSize, HAMMING_DISTANCE_SPARSITY)
 
-	s.HardLocations[len(s.HardLocations)-1].Address = targetAddr
+	s.HammingDistanceHardLocations[len(s.HammingDistanceHardLocations)-1].Address = targetAddr
 	s.Write(targetAddr, targetAddr)
 
 	// Corrupt the lookup key with a randomized bit noise mask
@@ -212,13 +212,13 @@ func TestWriteNoiseToleranceWithKnownAddress(t *testing.T) {
 	dataDist := targetAddr.HammingDistance(retrievedAddr)
 
 	if dataDist != 0 {
-		t.Errorf("SDM failed to self-converge on the target. "+
+		t.Errorf("HammingDistanceSDM failed to self-converge on the target. "+
 			"Recovered address deviates by %d bits", dataDist)
 	}
 }
 
-func testWriteRead(t *testing.T, bitSize int, numLocations int, sparsity float64, numTests int, testData bool) {
-	s, _ := NewSDM(bitSize, numLocations)
+func testHammingDistance_WriteRead(t *testing.T, bitSize int, numLocations int, sparsity float64, numTests int, testData bool) {
+	s, _ := NewHammingDistanceSDM(bitSize, numLocations)
 
 	targetAddrs := make([]Vector, numTests)
 	targetData := make([]Vector, numTests)
@@ -250,23 +250,23 @@ func testWriteRead(t *testing.T, bitSize int, numLocations int, sparsity float64
 	}
 }
 
-// A 128-bit SDM with 10,000 hard locations and a radius of 50 bits, it will behave exactly
+// A 128-bit HammingDistanceSDM with 10,000 hard locations and a radius of 50 bits, it will behave exactly
 // like Kanerva's classic architecture—allowing auto-associative, noise-tolerant retrieval—but
 // it will max out at storing roughly 1,000 unique memories.
-var bitSize = 128
-var numLocations = 10000 * 2 // Double to make sure the tests always pass
-var numTests = 1000 / 3      // Reduce to make sure the tests always pass
+var hammingDistance_bitSize = 128
+var hammingDistance_numLocations = 10000 * 2 // Double to make sure the tests always pass
+var hammingDistance_numTests = 1000 / 3      // Reduce to make sure the tests always pass
 
-func Test_Write_Multi_Addresses(t *testing.T) {
+func TestHammingDistance_Write_Multi_Addresses(t *testing.T) {
 	for _, v := range []int{1, 2, 8} {
-		t.Logf("Testing %d Write/ReadAddress with a %d bit size...", numTests*v, bitSize*v)
-		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, false)
+		t.Logf("Testing %d Write/ReadAddress with a %d bit size...", hammingDistance_numTests*v, hammingDistance_bitSize*v)
+		testHammingDistance_WriteRead(t, hammingDistance_bitSize*v, hammingDistance_numLocations*v, HAMMING_DISTANCE_SPARSITY, hammingDistance_numTests*v, false)
 	}
 }
 
-func Test_Write_Multi_Data(t *testing.T) {
+func TestHammingDistance_Write_Multi_Data(t *testing.T) {
 	for _, v := range []int{1, 2, 8} {
-		t.Logf("Testing %d Write/ReadData with a %d bit size...", numTests*v, bitSize*v)
-		testWriteRead(t, bitSize*v, numLocations*v, SPARSITY, numTests*v, true)
+		t.Logf("Testing %d Write/ReadData with a %d bit size...", hammingDistance_numTests*v, hammingDistance_bitSize*v)
+		testHammingDistance_WriteRead(t, hammingDistance_bitSize*v, hammingDistance_numLocations*v, HAMMING_DISTANCE_SPARSITY, hammingDistance_numTests*v, true)
 	}
 }
